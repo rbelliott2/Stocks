@@ -17,7 +17,7 @@ sub new {
    bless($self,$class);
 
    $format = 'default' unless defined $format;
-   $self->{'format'} = $format;
+   $self->setFormat($format);
 
    $debug = 0 unless defined $debug;
    $self->{'debug'} = $debug;
@@ -32,49 +32,45 @@ sub getQuotes {
    my $self = shift;
    my ($symbols) = @{{@_}}{qw/symbols/};
 
-   my $symbolUrl;
+   my $symbolUrl = $self->_toUrlCode($symbols);
 
-   if ( ref $symbols eq 'ARRAY' )
-   {
-      $symbolUrl = join('+',@{ $symbols });
-   }
-   elsif (ref $symbols ne 'HASH' and defined $symbols) 
-   {
-      $symbolUrl = $symbols;
-   }
-   else
-   {
-      return {success => 0, message => 'Invalid company symbol(s) provided'};
-   }
-
-   my $req = GET 'http://finance.yahoo.com/d/quotes.csv?s=' . $symbolUrl . '&f=snb2b3';
+   my $req = GET 'http://finance.yahoo.com/d/quotes.csv?s=' . $symbolUrl . '&f=snb2b3poyght8kjva2erv1s6';
 
    my $res = $self->{'lwp'}->request($req);
 
-   unless ($res->is_success)
-   {
-      return {success => 0, message => $res->status_line};
-   }
-
-   my $raw_csv = $res->content;
+   return 0 unless ($res->is_success);
 
    my $quotes = {};
 
-   foreach ( split ("\r\n", $raw_csv) )
+   foreach ( split ("\r\n", $res->content) )
    {
       $self->{'csv'}->parse($_);
 
-      my ($symbol,$name,$ask,$bid) = $self->{'csv'}->fields();
+      my ($symbol,$name,$ask,$bid,$close,$open,$yield,$low,$high,$target,$high52,$low52,$volume,$avgVol,$eps,$pe,$holdings,$revenue) = $self->{'csv'}->fields();
 
       $quotes->{$symbol} = {
-         name  => $name,
-         ask   => $ask,
-         bid   => $bid,
+         name     => $name,
+         ask      => $ask,
+         bid      => $bid,
+         close    => $close,
+         open     => $open,
+         yield    => $yield,
+         low      => $low,
+         high     => $high,
+         target   => $target,
+         low52    => $low52,
+         high52   => $high52,
+         volume   => $volume,
+         volAvg   => $avgVol,
+         pe       => $pe,
+         holdings => $holdings,
+         revenue  => $revenue,
       };
    }
 
    return $self->_toXML($quotes) if ( $self->{'format'} eq 'xml' );
    return $self->_toJSON($quotes) if ( $self->{'format'} eq 'json' );
+   return $res->content if ( $self->{'format'} eq 'csv' );
 
    return $quotes;
 }
@@ -91,12 +87,32 @@ sub setFormat {
    {
       $self->{'format'} = 'json';
    }
+   elsif ($format eq 'csv')
+   {
+      $self->{'format'} = 'csv';
+   }
    else
    {
       $self->{'format'} = 'default';
    }
 
    return 1;
+}
+
+sub _toUrlCode {
+   my $self = shift;
+   my $symbols = $_[0];
+
+   if ( ref $symbols eq 'ARRAY' )
+   {
+      return join('+',@{ $symbols });
+   }
+   elsif ( ref $symbols eq '' ) 
+   {
+      return $symbols;
+   }
+
+   return 'DOW';
 }
 
 sub _toXML {
@@ -115,6 +131,19 @@ sub _toXML {
       <name>} . $quotes->{$_}->{'name'} . q{</name>
       <ask>} . $quotes->{$_}->{'ask'} . q{</ask>
       <bid>} . $quotes->{$_}->{'bid'} . q{</bid>
+      <close>} . $quotes->{$_}->{'close'} . q{</close>
+      <open>} . $quotes->{$_}->{'open'} . q{</open>
+      <yield>} . $quotes->{$_}->{'yield'} . q{</yield>
+      <target>} . $quotes->{$_}->{'target'} . q{</target>
+      <low>} . $quotes->{$_}->{'low'} . q{</low>
+      <high>} . $quotes->{$_}->{'high'} . q{</high>
+      <low52>} . $quotes->{$_}->{'low52'} . q{</low52>
+      <high52>} . $quotes->{$_}->{'high52'} . q{</high52>
+      <volume>} . $quotes->{$_}->{'volume'} . q{</volume>
+      <volAvg>} . $quotes->{$_}->{'volAvg'} . q{</volAvg>
+      <pe>} . $quotes->{$_}->{'pe'} . q{</pe>
+      <holdings>} . $quotes->{$_}->{'holdings'} . q{</holdings>
+      <revenue>} . $quotes->{$_}->{'revenue'} . q{</revenue>
    </quote>}
    }
 
